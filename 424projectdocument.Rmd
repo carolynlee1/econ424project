@@ -313,13 +313,32 @@ The estimated standard deviations are estimated more precisely than the means be
 
 Looking at the confidence intervals, we also see the estimates for SD are more precise as the confidence interval only contains positive numbers whereas the interval for the mean contains both positive and negative numbers. 
 
-###1.6 
+### 1.6 Annual Estimates and Annualized Sharpe Ratios 
 ```{r annual sharpe, echo=FALSE}
 ##compute annualized sharpe ratios
 muhat.vals.annualized <- 12*muhat.vals
 sd.vals.annualized <- sqrt(12)*sd.vals
 SharpeRatios.annualized = (muhat.vals.annualized - rf)/sd.vals.annualized
-##print annualized sharpe ratios
-SharpeRatios.annualized
+##print annualized values and sharpe ratios
+rbind(muhat.vals.annualized,sd.vals.annualized,SharpeRatios.annualized)
+stats.mat
+##ranking assets vs monthly Sharpe ratio
+sort(muhat.vals.annualized)
+SharpeRatios
+
+
+```
+
+Of the annualized values, VFINX has the highest average return while VBISX has the lowest average annual return. VEIEX has the highest standard deviation while VBISX has the lowest. The asset rankings for the annualized means are almost the same as with the monthly Sharpe ratios, they only differ in the top two highest assets (VPACX is the highest ranked for monthly Sharpe ratio whereas VFINX is ranked highest for annualized mean return). 
+
+Assuming we get the average annual return every year for 5 years, a $1 investment would grow to this amount after 5 years in each of these assets: 
+
+```{r annualized growth 5 years, echo=FALSE}
+1*(1+muhat.vals.annualized)^5
+```
+
+### 1.7 Pair-wise Scatterplots
+```{r scatterplots, echo=FALSE}
+pairs(ret.mat, col="blue")
 ```
 
