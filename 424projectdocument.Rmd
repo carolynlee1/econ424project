@@ -337,8 +337,244 @@ Assuming we get the average annual return every year for 5 years, a $1 investmen
 1*(1+muhat.vals.annualized)^5
 ```
 
-### 1.7 Pair-wise Scatterplots
+### 1.7 Pair-wise Scatterplots and Covariance Matrix
 ```{r scatterplots, echo=FALSE}
 pairs(ret.mat, col="blue")
+```
+
+There is strong positive linear correlation between VFINX and VEURX, VEIEX and VPACX, VFINC and VPACX, and somewhat strong positive relationship between VEURX and VPACX, VBLTX and VBISX. 
+
+```{r covmat}
+cov.mat
+
+```
+
+From the covariance matrix above, we see that VFINX  weakly positively covaries with VEURX, VEIEX, VBLTX, and VPACX, and weakly negatively covaries with VBISX. VEURX  weakly positively covaries with VFINX, VEURX, VEIEX, VBLTX, and VPACX. VEIEX has the strongest covariances with the other 5 assets, and all covariances are positive. VBLTX weakly positively covaries with all the other 5 assets. VBISX  weakly negatively covaries with VFINX, VEURX, and VPACX, while weakly positively covaries with VEIEX, VBLTX, and VBISX. VPACX weakly covaries with all stocks except VBISX, with which it weakly negatively covaries.
+
+### 1.8 Correlation Matrix 
+```{r corr mat}
+cor.mat
+corrplot(cor.mat, method="ellipse")
+
+```
+
+VEIEX and VPACX are the most highly correlated. VPACX and VBISX are the least correlated. If two assets are negatively correlated then this reduces the portfolio variance from the diversification effect. Since VPACX and VBISX are slightly negatively correlated, there is risk reduction benefit of holding these two assets in a portfolio. 
+
+### 2.1 
+
+```{r var analysis, echo=FALSE}
+
+# function to compute normal and empirical VaR for a matrix of returns
+
+Value.at.Risk = function(x, p=0.05, w=100000, method=c("normal", "empirical")) {
+	method=method[1]
+  x = as.matrix(x)
+  if (method == "normal") {
+	  q = apply(x, 2, mean) + apply(x, 2, sd)*qnorm(p)
+  } else {    
+    q = apply(x, 2, quantile, p)
+  }
+	VaR = (exp(q) - 1)*w
+	VaR
+}
+
+
+# compute 5% and 1% normal VaR for all assets
+VaR.normal.05 = Value.at.Risk(ret.mat, p=0.05, method="normal")
+VaR.normal.05
+VaR.normal.01 = Value.at.Risk(ret.mat, p=0.01)
+VaR.normal.01
+
+```
+
+
+### 2.1a Bootstrapping Estimates, Standard Errors, and 95% Confidence Intervals 
+```{r bootstrap standard error}
+
+# write a function to compute the annual normal VaR
+
+# function to bootstrap VaR
+ValueAtRisk.05.boot = function(x, idx, p=0.05, w=100000) {
+
+	q = mean(x[idx]) + sd(x[idx])*qnorm(p)
+	VaR = (exp(q) - 1)*w
+	VaR
+}
+
+ValueAtRisk.01.boot = function(x, idx, p=0.01, w=100000) {
+
+	q = mean(x[idx]) + sd(x[idx])*qnorm(p)
+	VaR = (exp(q) - 1)*w
+	VaR
+}
+
+# bootstrap estimated standard errors for 5% VaR estimates
+VaR.05.boot.vfinx = boot(ret.mat[, "vfinx"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+
+VaR.05.boot.vfinx
+ci.VaR.05.boot.vfinx <-boot.ci(VaR.05.boot.vfinx, conf = 0.95, type = c("norm","perc"))
+
+VaR.05.boot.veurx = boot(ret.mat[, "veurx"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+VaR.05.boot.veurx
+ci.VaR.05.boot.veurx <- boot.ci(VaR.05.boot.veurx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.05.boot.veiex = boot(ret.mat[, "veiex"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+VaR.05.boot.veiex
+ci.VaR.05.boot.veiex <- boot.ci(VaR.05.boot.veiex, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.05.boot.vbltx = boot(ret.mat[, "vbltx"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+VaR.05.boot.vbltx
+ci.VaR.05.boot.vbltx <- boot.ci(VaR.05.boot.vbltx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.05.boot.vbisx = boot(ret.mat[, "vbisx"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+VaR.05.boot.vbisx
+ci.VaR.05.boot.vbisx <- boot.ci(VaR.05.boot.vbisx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.05.boot.vpacx = boot(ret.mat[, "vpacx"], 
+                         statistic=ValueAtRisk.05.boot, R=999)
+VaR.05.boot.vpacx
+ci.VaR.05.boot.vpacx <- boot.ci(VaR.05.boot.vpacx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.05.boot.sd.vals <- data.frame(sd(VaR.05.boot.vfinx$t), sd(VaR.05.boot.veurx$t), sd(VaR.05.boot.veiex$t), sd(VaR.05.boot.vbltx$t), sd(VaR.05.boot.vbisx$t), sd(VaR.05.boot.vpacx$t))
+
+VaR.05.boot.sd.vals <- rbind(VaR.05.boot.sd.vals, VaR.normal.05)
+
+colnames(VaR.05.boot.sd.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
+rownames(VaR.05.boot.sd.vals) <- c("std. error", "VaR Normal 0.05")
+
+
+# bootstrap estimated standard errors for 1% VaR estimates
+VaR.01.boot.vfinx = boot(ret.mat[, "vfinx"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+
+VaR.01.boot.vfinx
+ci.VaR.01.boot.vfinx <- boot.ci(VaR.01.boot.vfinx, conf = 0.95, type = c("norm","perc"))
+
+VaR.01.boot.veurx = boot(ret.mat[, "veurx"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+VaR.01.boot.veurx
+ci.VaR.01.boot.veurx <- boot.ci(VaR.01.boot.veurx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.01.boot.veiex = boot(ret.mat[, "veiex"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+VaR.01.boot.veiex
+ci.VaR.01.boot.veiex <- boot.ci(VaR.01.boot.veiex, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.01.boot.vbltx = boot(ret.mat[, "vbltx"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+VaR.01.boot.vbltx
+ci.VaR.01.boot.vbltx <- boot.ci(VaR.01.boot.vbltx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.01.boot.vbisx = boot(ret.mat[, "vbisx"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+VaR.01.boot.vbisx
+ci.VaR.01.boot.vbisx <- boot.ci(VaR.01.boot.vbisx, conf = 0.95, type = c("norm","perc"))
+
+
+VaR.01.boot.vpacx = boot(ret.mat[, "vpacx"], 
+                         statistic=ValueAtRisk.01.boot, R=999)
+VaR.01.boot.vpacx
+ci.VaR.01.boot.vpacx <- boot.ci(VaR.01.boot.vpacx, conf = 0.95, type = c("norm","perc"))
+
+## making table for bootstrap 1% VaR and bootstrap standard errors
+VaR.01.boot.sd.vals <- data.frame(sd(VaR.01.boot.vfinx$t), sd(VaR.01.boot.veurx$t), sd(VaR.01.boot.veiex$t), sd(VaR.01.boot.vbltx$t), sd(VaR.01.boot.vbisx$t), sd(VaR.01.boot.vpacx$t))
+
+VaR.01.boot.sd.vals <- rbind(VaR.01.boot.sd.vals, VaR.normal.01)
+
+colnames(VaR.01.boot.sd.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
+rownames(VaR.01.boot.sd.vals) <- c("std. error", "VaR Normal 0.01")
+
+
+#print table of 1% and 5% VaR estimates with bootstrap standard errors 
+VaR.05.boot.sd.vals
+VaR.01.boot.sd.vals
+
+
+## plot 1% and 5% VaR estimates with bootstrap standard errors
+plot(VaR.05.boot.vfinx)
+plot(VaR.05.boot.veurx)
+plot(VaR.05.boot.veiex)
+plot(VaR.05.boot.vbltx)
+plot(VaR.05.boot.vbisx)
+plot(VaR.05.boot.vpacx)
+
+plot(VaR.01.boot.vfinx)
+plot(VaR.01.boot.veurx)
+plot(VaR.01.boot.veiex)
+plot(VaR.01.boot.vbltx)
+plot(VaR.01.boot.vbisx)
+plot(VaR.01.boot.vpacx)
+
+```
+
+Based on these standard errors, we can see that the estimates for 5% VaR of VEURX are precise, as the standard error is less than or equal to 10% of the size of the VaR estimate. 
+
+The 1% VaR estimate for VEURX and VEIEX are precise since their standard errors are less than 10% of the size of the estimates. 
+
+The asset with the lowest 1% VaR is VBISX whereas the asset with the highest 1% Var is VEIEX. The asset with the lowest 5% VaR is also VBISX and the highest is also VEIEX. 
+
+
+#### 95% Confidence Level of 5% VaR estimates 
+
+``` {r CI 5% VaR}
+##table for 95% CI for 5% VaR estimates
+
+ci.VaR.05.boot.vals <- rbind(ci.VaR.05.boot.vfinx$normal,ci.VaR.05.boot.veurx$normal, ci.VaR.05.boot.veiex$normal,ci.VaR.05.boot.vbltx$normal,ci.VaR.05.boot.vbisx$normal,ci.VaR.05.boot.vpacx$normal)
+
+rownames(ci.VaR.05.boot.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
+
+colnames(ci.VaR.05.boot.vals) <- c("conf", "lower bound", "upper bound")
+
+ci.VaR.05.boot.vals
+
+```
+
+#### 95% Confidence Level of 1% VaR estimates 
+```{r CI 1% VaR}
+
+##table for 95% CI for 1% VaR estimates
+
+ci.VaR.01.boot.vals <- rbind(ci.VaR.01.boot.vfinx$normal,ci.VaR.01.boot.veurx$normal, ci.VaR.01.boot.veiex$normal,ci.VaR.01.boot.vbltx$normal,ci.VaR.01.boot.vbisx$normal,ci.VaR.01.boot.vpacx$normal)
+
+rownames(ci.VaR.01.boot.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
+
+colnames(ci.VaR.01.boot.vals) <- c("conf", "lower bound", "upper bound")
+
+
+
+```
+
+## 2.2 Annual VaR
+```{r annual VaR}
+#compute annual normal VaR
+Value.at.Risk.annualized = function(x, p=0.05, w=100000, method=c("normal", "empirical")) {
+	method=method[1]
+  x = as.matrix(x)
+  if (method == "normal") {
+	  q = apply(x*12, 2, mean) + apply(sqrt(12)*x, 2, sd)*qnorm(p)
+  } else {    
+    q = apply(x*12, 2, quantile, p)
+  }
+	VaR = (exp(q) - 1)*w
+	VaR
+}
+
+Value.at.Risk.annualized(ret.mat, p=0.01)
+Value.at.Risk.annualized(ret.mat, p=0.05)
+
+
 ```
 
