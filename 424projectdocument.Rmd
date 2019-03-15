@@ -1,580 +1,338 @@
 ---
-title: "424project"
+title: "HW8"
 output: word_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
 options(digits=3, width=70)
-
-library(IntroCompFinR)
-library(PerformanceAnalytics)
-library(tseries)
 library(zoo)
-library(boot)
 library(corrplot)
+library(IntroCompFinR)
+library(boot)
 
+lab9.df = read.csv("C:/Users/calfa/Documents/ECON 424/econ424lab9returns.csv",
+                  stringsAsFactors=F)
+colnames(lab9.df)
 
+#Create zoo object from data and dates in lab9.df
+lab9.z = zoo(x=lab9.df[, -1], 
+             order.by=as.yearmon(lab9.df[, 1], format="%b-%y"))
+start(lab9.z)
+end(lab9.z)
+colnames(lab9.z)
 
-# change this to the appropriate path on your computer. This is where some data
-# will be saved
-savePath="C:/Users/calfa/Documents/ECON 424/project"
-
-getwd()
-setwd("C:/Users/calfa/Documents/ECON 424/project")
-#
-# load data from Yahoo!
-#
-
-# get monthly adjusted closing price data on Vanguard mutual fund data from Yahoo
-# using the tseries function get.hist.quote. Set sample to December 2009 through
-# December 2014. Note: if you are not careful with the start and end dates
-# or if you set the retclass to "ts" then results might look weird
-
-asset.names = c("vfinx","veurx","veiex","vbltx","vbisx","vpacx")
-start.date = "2014-01-01"
-end.date = "2019-01-31"
-
-vfinx.prices = get.hist.quote(instrument="vfinx", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")    
-veurx.prices = get.hist.quote(instrument="veurx", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")
-veiex.prices = get.hist.quote(instrument="veiex", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")
-vbltx.prices = get.hist.quote(instrument="vbltx", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")
-vbisx.prices = get.hist.quote(instrument="vbisx", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")
-vpacx.prices = get.hist.quote(instrument="vpacx", start=start.date,
-                             end=end.date, quote="AdjClose",
-                             provider="yahoo", origin="1970-01-01",
-                             compression="m", retclass="zoo")
-# change time indices to class yearmon, which is most appropriate for monthly data
-index(vfinx.prices) = as.yearmon(index(vfinx.prices))
-index(veurx.prices) = as.yearmon(index(veurx.prices))
-index(veiex.prices) = as.yearmon(index(veiex.prices))
-index(vbltx.prices) = as.yearmon(index(vbltx.prices))
-index(vbisx.prices) = as.yearmon(index(vbisx.prices))
-index(vpacx.prices) = as.yearmon(index(vpacx.prices))
-
-projectPrices.z = merge(vfinx.prices,veurx.prices,veiex.prices,vbltx.prices,
-                        vbisx.prices,vpacx.prices)
-colnames(projectPrices.z) = asset.names
-# create data.frame for downloading
-projectPrices.df = coredata(projectPrices.z)
-rownames(projectPrices.df) = as.character(index(projectPrices.z))
-
-#
-
-
-#
-# Create matrix of return data and compute pairwise scatterplots
-#
-projectReturns.z = diff(log(projectPrices.z))   
-
-ret.mat = coredata(projectReturns.z)
-
-#
-# compute descriptive statistics
-#
-
-muhat.vals = colMeans(projectReturns.z)
-sd.vals = apply(projectReturns.z, 2, sd)
-skew.vals = apply(projectReturns.z, 2, skewness)
-ekurt.vals = apply(projectReturns.z, 2, kurtosis)
-cov.mat = var(projectReturns.z)
-cor.mat = cov2cor(cov.mat)
-covhat.vals = cov.mat[lower.tri(cov.mat)]
-rhohat.vals = cor.mat[lower.tri(cor.mat)]
-names(covhat.vals) <- names(rhohat.vals) <- 
-  c("vfinx,veurx","vfinx,veiex","vfinx,vbltx", "vfinx,vbisx", "vfinx,vpacx",
-    "veurx,veiex", "veurx,vbltx", "veurx,vbisx", "veurx,vpacx",
-    "veiex,vbltx", "veiex,vbisx", "veiex,vpacx",
-    "vbltx,vbisx", "vbltx,vpacx",
-    "vbisx,vpacx")
-# empirical quantiles for VaR calculations
-q.vals = apply(projectReturns.z, 2, quantile, prob=c(0.01,0.05))
-
-# display results in a table
-stats.mat = rbind(muhat.vals, 
-                  sd.vals,
-                  skew.vals,
-                  ekurt.vals,
-                  q.vals)
-rownames(stats.mat) = c("Mean", "Std Dev", "Skewness", 
-                        "Excess Kurtosis", "1% Quantile", 
-                        "5% Quantile")
-# print statistics
-stats.mat
+ret.mat = coredata(lab9.z)
 
 ```
 
-## 1. Return Calculation and Sample Statistics 
+# 1 Muhat estimates and SD values
+```{r CER model parameter estimates, echo = FALSE}
 
-### 1.1 Time Trends of Fund Prices and Continuously Compounded Returns
-```{r simple and cc returns, echo=FALSE}
-
-#
-# compute cc and simple returns
-#
-
-projectReturns.z = diff(log(projectPrices.z))   
-projectReturnsSimple.z = exp(projectReturns.z) - 1
-# create data.frame for downloading
-projectReturns.df = as.data.frame(coredata(projectReturns.z))
-rownames(projectReturns.df) = as.character(index(projectReturns.z))
-projectReturnsSimple.df = as.data.frame(coredata(projectReturnsSimple.z))
-rownames(projectReturnsSimple.df) = as.character(index(projectReturnsSimple.z))
-
-
-#
-# plot data
-#
-my.panel <- function(...) {
-  lines(...)
-  abline(h=0)
-}
-
-plot(projectPrices.z, col="blue", lwd=2)
-plot(projectReturns.z, panel=my.panel, col="blue", lwd=2)
-
-
-```
-
-The prices of VEURX and VEIEX decreased a large amount throughout 2018, and VFINX dipped a bit near the middle to end of 2018 as well. We see this reflected in the returns, as the returns of all 3 assets were in the negatives in late 2018. VBLTX and VBISX seem to be more stable and exhibit less sharp of a decrease in returns, and also shows less volatility over the years. An event that might explain these low returns in mid to late 2018 is the stock market crash that happened in October 2018, which lasted until late December. The stock market crash happened due to the trade war with China, where the Trump administration induced tariffs on a huge amount of Chinese imports. In addition to this, the Federal Reserve increased interest rates, which was the third time they had increased rates that year. 
-
-```{r cum returns, echo=FALSE}
-# plot growth of $1 over the five years using PerformanceAnalytics function
-# chart.CumReturns
-chart.CumReturns(projectReturnsSimple.z, wealth.index=TRUE, legend.loc="topleft", 
-                 lwd=2, main="growth of $1") 
-```
-
-VFINX gives the highest value. I am not surprised, since the S&P 500 is a fund with 500 of the largest US stocks, so it has the largest capitalization of well-performing stocks. Since many of the company stocks in the S&P 500 have grown explosively in the last 5 years, it makes sense that the VFINX fund has grown the most out of the 6 funds. 
-
-###1.2 Four-Panel Plot of Return Series 
-
-```{r return series, echo=FALSE}
-fourPanelPlot(projectReturns.z[, "vfinx", drop=FALSE])
-fourPanelPlot(projectReturns.z[, "veurx", drop=FALSE])
-fourPanelPlot(projectReturns.z[, "veiex", drop=FALSE])
-fourPanelPlot(projectReturns.z[, "vbltx", drop=FALSE])
-fourPanelPlot(projectReturns.z[, "vbisx", drop=FALSE])
-fourPanelPlot(projectReturns.z[, "vpacx", drop=FALSE])
-
-
-```
-
-The returns do not look normally distributed. 
-For the returns for VFINX, we can see that in the QQ-plot, the points deviate from linearity in the left and right tails. In the box plot, there also appears to be large negative outliers and some positive outliers. Also in the histogram, we see that there is skew towards the left. These all indicate that the returns are not normally distributed. There does not appear to be any linear time dependence since the SACF plot shows no significatn autocorrelations for lags less than 15, and all of the sample autocorrelations are small and show no distinct pattern over time. 
-For VEURX, the QQ-plot shows deviation from linearity in left and right tails, and also there are breaks in the middle of the plot. Also, in the histogram we see that the graph has fat left and right tails and is not clustered around the mean. These indicate non-normality for this return series. There does not appear to be linear time dependence, since there are no patterns over time. 
-For VEIEX, the histogram shows positive skew. In the qq-plot, the points deviate from linearity in the left tail, and we see outliers in the left and right tails. The boxplot also indicates positive skew. These all indicate the series is not normally distributed.  There does not appear to be linear time dependence, since there are no patterns over time. 
-For VBLTX, the histogram indicates left skew. The qq-plot shows deviation from linearity in the left and right tails. The boxplot also shows us there are positive and negative outliers. Therefore the series is not normally distributed. There does not appear to be linear time dependence, since there are no patterns over time. 
-For VBISX, the histogram indicates right skew. The qq plot shows strong deviation from linearity in the right tail. The boxplot indicates one positive outlier. Therefore the series is not normally distributed.  There does not appear to be linear time dependence, since there are no patterns over time. 
-For VPACX, the histogram indicates some right skew, but generally looks pretty  normally distributed. However, from the qq-plot we see that there is deviation from linearity in the left and right tails. Also, the boxplot indicates there are many negative outliers, and one positive one. Therefore the series is not normally distributed. There does not appear to be linear time dependence, since there are no patterns over time. 
-
-### 1.3 Descriptive Statistics 
-
-```{r des stat, echo=FALSE}
-# compute descriptive statistics
-#
-
-muhat.vals = colMeans(projectReturns.z)
-sd.vals = apply(projectReturns.z, 2, sd)
-skew.vals = apply(projectReturns.z, 2, skewness)
-ekurt.vals = apply(projectReturns.z, 2, kurtosis)
-cov.mat = var(projectReturns.z)
-cor.mat = cov2cor(cov.mat)
-covhat.vals = cov.mat[lower.tri(cov.mat)]
-rhohat.vals = cor.mat[lower.tri(cor.mat)]
-names(covhat.vals) <- names(rhohat.vals) <- 
-  c("vfinx,veurx","vfinx,veiex","vfinx,vbltx", "vfinx,vbisx", "vfinx,vpacx",
-    "veurx,veiex", "veurx,vbltx", "veurx,vbisx", "veurx,vpacx",
-    "veiex,vbltx", "veiex,vbisx", "veiex,vpacx",
-    "vbltx,vbisx", "vbltx,vpacx",
-    "vbisx,vpacx")
-# empirical quantiles for VaR calculations
-q.vals = apply(projectReturns.z, 2, quantile, prob=c(0.01,0.05))
-
-# display results in a table
-stats.mat = rbind(muhat.vals, 
-                  sd.vals,
-                  skew.vals,
-                  ekurt.vals,
-                  q.vals)
-rownames(stats.mat) = c("Mean", "Std Dev", "Skewness", 
-                        "Excess Kurtosis", "1% Quantile", 
-                        "5% Quantile")
-# print statistics
-stats.mat
-``` 
-
-The fund with the highest average return is VFINX and the one with the lowest average return is VBISX. VBISX also has the lowest average standard deviation, while VEIEX has the highest average SD. VEIEX has the second smallest skew and has the smallest excess kurtosis, which makes it appear to be the most normally distributed. VFINX looks to be the least normally distributed as it has the largest skewness and also the largest excess kurtosis. We know that for a normal distribution, both skew and excess kurtosis should be 0. 
-
-### 1.4 Sharpe Ratios
-```{r sharpe, echo=FALSE}
-# plot return-risk tradeoff and compute Sharpe ratios
-#
-## risk free rate
-rf = 0.005/12
-
-plot(sd.vals, muhat.vals, xlim=c(0, 0.06), ylim=c(0, 0.013),
-     ylab="Expected Return", xlab="Standard Deviation",
-     cex=2, pch=16, col="cornflowerblue")
-text(sd.vals, muhat.vals, labels=colnames(projectReturns.z),
-     pos=3)
-
-SharpeRatios = (muhat.vals - rf)/sd.vals
-
-
-# compute bootstrap standard error 
-# function to bootstrap VaR
-sharpeRatio.boot = function(x, idx, risk.free) {
-  muhat = mean(x[idx])
-  sigmahat = sd(x[idx])
-  sharpeRatio = (muhat - risk.free)/sigmahat
-  sharpeRatio
-}
-
-sharpe.vfinx.boot = boot(ret.mat[, "vfinx"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-sharpe.veurx.boot = boot(ret.mat[, "veurx"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-sharpe.veiex.boot = boot(ret.mat[, "veiex"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-sharpe.vbltx.boot = boot(ret.mat[, "vbltx"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-sharpe.vbisx.boot = boot(ret.mat[, "vbisx"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-sharpe.vpacx.boot = boot(ret.mat[, "vpacx"], 
-                         statistic=sharpeRatio.boot, R=999, risk.free=rf)
-
-
-sharpe.vfinx.boot
-sharpe.veurx.boot
-sharpe.veiex.boot
-sharpe.vbltx.boot
-sharpe.vbisx.boot
-sharpe.vpacx.boot
-
-boot.sd.vals <- data.frame(sd(sharpe.vfinx.boot$t), sd(sharpe.veurx.boot$t), sd(sharpe.veiex.boot$t), sd(sharpe.vbltx.boot$t), sd(sharpe.vbisx.boot$t), sd(sharpe.vpacx.boot$t))
-boot.sd.vals <- rbind(boot.sd.vals, SharpeRatios)
-
-colnames(boot.sd.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
-rownames(boot.sd.vals) <- c("std. error", "sharpe ratios")
-
-boot.sd.vals
-```
-
-### 1.5 Standard Errors and 95% Confidence Intervals of Mean and SD
-```{r code, echo=FALSE}
-
-# compute standard errors and confidence intervals (do it yourself)
-muhat.vals = apply(ret.mat, 2, mean)
-sigmahat.vals = apply(ret.mat, 2, sd)
-
+muhat.vals = apply(lab9.z, 2, mean)
 muhat.vals
+sigma2hat.vals = apply(lab9.z, 2, var)
+sigma2hat.vals
+sigmahat.vals = apply(lab9.z, 2, sd)
 sigmahat.vals
 
-nobs = nrow(ret.mat)
-nobs
-
-##standard error of mean
-se.muhat = sigmahat.vals/sqrt(nobs)
-se.muhat
-
-##standard error of sd
-se.sigmahat = sigmahat.vals/sqrt(2*nobs)
-se.sigmahat
-
-## confidence interval for mean
-mu.lower = muhat.vals - 2*se.muhat
-mu.upper = muhat.vals + 2*se.muhat
-cbind(mu.lower,mu.upper)
-
-
-## confidence interval for sd
-sigma.lower = sigmahat.vals - 2*se.sigmahat
-sigma.upper = sigmahat.vals + 2*se.sigmahat
-cbind(sigma.lower,sigma.upper)
 ```
 
-The estimated standard deviations are estimated more precisely than the means because the standard errors are small. The SE for sd are less than 1/10 of the size of the estimates  whereas the SE for means are the same size as the estimates, which means they are not estimated precisely.
-
-Looking at the confidence intervals, we also see the estimates for SD are more precise as the confidence interval only contains positive numbers whereas the interval for the mean contains both positive and negative numbers. 
-
-### 1.6 Annual Estimates and Annualized Sharpe Ratios 
-```{r annual sharpe, echo=FALSE}
-##compute annualized sharpe ratios
-muhat.vals.annualized <- 12*muhat.vals
-sd.vals.annualized <- sqrt(12)*sd.vals
-SharpeRatios.annualized = (muhat.vals.annualized - rf)/sd.vals.annualized
-##print annualized values and sharpe ratios
-rbind(muhat.vals.annualized,sd.vals.annualized,SharpeRatios.annualized)
-stats.mat
-##ranking assets vs monthly Sharpe ratio
-sort(muhat.vals.annualized)
-SharpeRatios
-
-
-```
-
-Of the annualized values, VFINX has the highest average return while VBISX has the lowest average annual return. VEIEX has the highest standard deviation while VBISX has the lowest. The asset rankings for the annualized means are almost the same as with the monthly Sharpe ratios, they only differ in the top two highest assets (VPACX is the highest ranked for monthly Sharpe ratio whereas VFINX is ranked highest for annualized mean return). 
-
-Assuming we get the average annual return every year for 5 years, a $1 investment would grow to this amount after 5 years in each of these assets: 
-
-```{r annualized growth 5 years, echo=FALSE}
-1*(1+muhat.vals.annualized)^5
-```
-
-### 1.7 Pair-wise Scatterplots and Covariance Matrix
-```{r scatterplots, echo=FALSE}
-pairs(ret.mat, col="blue")
-```
-
-There is strong positive linear correlation between VFINX and VEURX, VEIEX and VPACX, VFINC and VPACX, and somewhat strong positive relationship between VEURX and VPACX, VBLTX and VBISX. 
-
-```{r covmat}
+## 1 - Covariance and correlation matrices
+```{r cov and cor mat, echo =FALSE}
+cov.mat = var(lab9.z)
 cov.mat
-
-```
-
-From the covariance matrix above, we see that VFINX  weakly positively covaries with VEURX, VEIEX, VBLTX, and VPACX, and weakly negatively covaries with VBISX. VEURX  weakly positively covaries with VFINX, VEURX, VEIEX, VBLTX, and VPACX. VEIEX has the strongest covariances with the other 5 assets, and all covariances are positive. VBLTX weakly positively covaries with all the other 5 assets. VBISX  weakly negatively covaries with VFINX, VEURX, and VPACX, while weakly positively covaries with VEIEX, VBLTX, and VBISX. VPACX weakly covaries with all stocks except VBISX, with which it weakly negatively covaries.
-
-### 1.8 Correlation Matrix 
-```{r corr mat}
+cor.mat = cor(lab9.z)
 cor.mat
-corrplot(cor.mat, method="ellipse")
+```
+
+
+# 2 Plot risk return tradeoff 
+
+```{r risk return tradeoff, echo = FALSE}
+plot( sigmahat.vals, muhat.vals)
 
 ```
 
-VEIEX and VPACX are the most highly correlated. VPACX and VBISX are the least correlated. If two assets are negatively correlated then this reduces the portfolio variance from the diversification effect. Since VPACX and VBISX are slightly negatively correlated, there is risk reduction benefit of holding these two assets in a portfolio. 
+# 2a - Sharpe ratio computation
 
-### 2.1 
+```{r sharpe ratio, echo = FALSE}
+rf=0.005
 
-```{r var analysis, echo=FALSE}
 
-# function to compute normal and empirical VaR for a matrix of returns
-
-Value.at.Risk = function(x, p=0.05, w=100000, method=c("normal", "empirical")) {
-	method=method[1]
-  x = as.matrix(x)
-  if (method == "normal") {
-	  q = apply(x, 2, mean) + apply(x, 2, sd)*qnorm(p)
-  } else {    
-    q = apply(x, 2, quantile, p)
-  }
-	VaR = (exp(q) - 1)*w
-	VaR
+sharpeRatio.boot = function(x, idx, risk.free) {
+muhat = mean(x[idx])
+sigmahat = sd(x[idx])
+sharpeRatio = (muhat - risk.free)/sigmahat
+sharpeRatio
 }
 
+sharpe.boeing.boot <- boot(ret.mat[,"Boeing"], statistic=sharpeRatio.boot, R=999, risk.free=rf)
+sharpe.microsoft.boot <- boot(ret.mat[,"Microsoft"], statistic=sharpeRatio.boot, R=999, risk.free=rf)
+sharpe.nordstrom.boot <- boot(ret.mat[,"Nordstrom"], statistic=sharpeRatio.boot, R=999, risk.free=rf)
+sharpe.starbucks.boot <- boot(ret.mat[,"Starbucks"], statistic=sharpeRatio.boot, R=999, risk.free=rf)
 
-# compute 5% and 1% normal VaR for all assets
-VaR.normal.05 = Value.at.Risk(ret.mat, p=0.05, method="normal")
-VaR.normal.05
-VaR.normal.01 = Value.at.Risk(ret.mat, p=0.01)
-VaR.normal.01
+
+sharpe.boot.vals <- rbind(mean(sharpe.boeing.boot$t),
+mean(sharpe.microsoft.boot$t),
+mean(sharpe.nordstrom.boot$t),
+mean(sharpe.starbucks.boot$t))
+rownames(sharpe.boot.vals) <- c("boeing", "msft", "nordstrom", "starbucks")
+colnames(sharpe.boot.vals) <- "Sharpe ratios"
+
+
+boot.sd.vals <- rbind(sd(sharpe.boeing.boot$t)
+,sd(sharpe.microsoft.boot$t)
+,sd(sharpe.nordstrom.boot$t)
+,sd(sharpe.starbucks.boot$t))
+
+rownames(boot.sd.vals) <- c("boeing", "msft", "nordstrom", "starbucks")
+colnames(boot.sd.vals) <- "boot standard error"
+
+sharpe.boot.vals
+boot.sd.vals
+
 
 ```
 
+Microsoft has the highest Sharpe ratio which is 0.3809. 
 
-### 2.1a Bootstrapping Estimates, Standard Errors, and 95% Confidence Intervals 
-```{r bootstrap standard error}
+# 2b Bootstrap estimates of SE and 95% confidence intervals for Sharpe ratios
 
-# write a function to compute the annual normal VaR
+```{r bootstrap CI, echo = FALSE}
 
-# function to bootstrap VaR
-ValueAtRisk.05.boot = function(x, idx, p=0.05, w=100000) {
+ci.sharpe.boeing.boot <-boot.ci(sharpe.boeing.boot, conf = 0.95, type = c("norm","perc"))
+ci.sharpe.microsoft.boot <-boot.ci(sharpe.microsoft.boot, conf = 0.95, type = c("norm","perc"))
+ci.sharpe.nordstrom.boot <-boot.ci(sharpe.nordstrom.boot, conf = 0.95, type = c("norm","perc"))
+ci.sharpe.starbucks.boot <-boot.ci(sharpe.starbucks.boot, conf = 0.95, type = c("norm","perc"))
 
-	q = mean(x[idx]) + sd(x[idx])*qnorm(p)
-	VaR = (exp(q) - 1)*w
-	VaR
+
+ci.sharpe.boot <- rbind(ci.sharpe.boeing.boot$normal,ci.sharpe.microsoft.boot$normal, ci.sharpe.nordstrom.boot$normal,ci.sharpe.starbucks.boot$normal)
+
+rownames(ci.sharpe.boot) <- c("boeing", "msft", "nordstrom", "starbucks")
+colnames(ci.sharpe.boot) <- c("conf", "lower bound", "upper bound")
+
+ci.sharpe.boot
+
+```
+
+The estimate for the sharpe ratio for msft is estimated well because it only contains positive values. The 95% confidence interval of the other 3 asset's sharpe values contain negative and positive values, which indicates it's not estimated well since there's a wider range of values it could take on. 
+
+# 3a - Compute Global minimum variance portfolio with short sales 
+
+```{r global min var, echo=FALSE}
+# compute global minimum variance portfolio with short sales
+gmin.port = globalMin.portfolio(muhat.vals, cov.mat)
+gmin.port
+plot(gmin.port, col="blue")
+
+
+B = 1000
+muhat.boeing.boot = rep(0, B)
+muhat.nord.boot = rep(0, B)
+muhat.sbux.boot = rep(0, B)
+muhat.msft.boot = rep(0, B)
+n.obs = nrow(lab9.df)
+set.seed(123)
+for (i in 1:B) {
+  boot.boeing = sample(lab9.df[,2], n.obs, replace=TRUE)
+  muhat.boeing.boot[i] = mean(boot.boeing)
+  boot.nord = sample(lab9.df[,3], n.obs, replace=TRUE)
+  muhat.nord.boot[i] = mean(boot.nord)
+  boot.sbux = sample(lab9.df[,4], n.obs, replace=TRUE)
+  muhat.sbux.boot[i] = mean(boot.sbux)
+  boot.msft = sample(lab9.df[,5], n.obs, replace=TRUE)
+  muhat.msft.boot[i] = mean(boot.msft)
+  muhat.vals.temp=cbind(muhat.boeing.boot[i],muhat.nord.boot[i], muhat.sbux.boot[i],muhat.msft.boot[i])
+  boot.temp=cbind(boot.boeing,boot.nord,boot.sbux, boot.msft)
+  cov.mat.temp=var(boot.temp)
+  gmin.temp=globalMin.portfolio(muhat.vals.temp,cov.mat.temp)
 }
+```
 
-ValueAtRisk.01.boot = function(x, idx, p=0.01, w=100000) {
+# 3a - Bootstrap SE of global minimum variance portfolio
 
-	q = mean(x[idx]) + sd(x[idx])*qnorm(p)
-	VaR = (exp(q) - 1)*w
-	VaR
-}
+```{r bootstrap se, echo=FALSE}
+##bootstrap se
+se.boeing.boot = sd(muhat.boeing.boot)
+se.msft.boot = sd(muhat.msft.boot)
+se.nord.boot = sd(muhat.nord.boot)
+se.sbux.boot = sd(muhat.sbux.boot)
 
-# bootstrap estimated standard errors for 5% VaR estimates
-VaR.05.boot.vfinx = boot(ret.mat[, "vfinx"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
+se.boot.vals <- c(se.boeing.boot, se.nord.boot, se.sbux.boot, se.msft.boot)
+rbind(muhat.vals, se.boot.vals)
 
-VaR.05.boot.vfinx
-ci.VaR.05.boot.vfinx <-boot.ci(VaR.05.boot.vfinx, conf = 0.95, type = c("norm","perc"))
+```
+We see that the magnitude of the SE's are rather large. The SE values are the same size as the estimates, and for Nordstrom the SE magnitude is even greater than the estimate. This means the values are imprecise. 
 
-VaR.05.boot.veurx = boot(ret.mat[, "veurx"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
-VaR.05.boot.veurx
-ci.VaR.05.boot.veurx <- boot.ci(VaR.05.boot.veurx, conf = 0.95, type = c("norm","perc"))
+# 3b bootstrap confidence interval of global minimum variance portfolio
+```{r confidence intervals, echo = FALSE}
 
-
-VaR.05.boot.veiex = boot(ret.mat[, "veiex"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
-VaR.05.boot.veiex
-ci.VaR.05.boot.veiex <- boot.ci(VaR.05.boot.veiex, conf = 0.95, type = c("norm","perc"))
-
-
-VaR.05.boot.vbltx = boot(ret.mat[, "vbltx"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
-VaR.05.boot.vbltx
-ci.VaR.05.boot.vbltx <- boot.ci(VaR.05.boot.vbltx, conf = 0.95, type = c("norm","perc"))
+##95% confidence intervals
+lower.boeing.boot = mean(boot.boeing) - 2*se.boeing.boot
+upper.boeing.boot = mean(boot.boeing) + 2*se.boeing.boot
+width.boeing.boot = upper.boeing.boot - lower.boeing.boot
+ci.boeing.boot <- rbind(lower.boeing.boot, upper.boeing.boot, width.boeing.boot)
 
 
-VaR.05.boot.vbisx = boot(ret.mat[, "vbisx"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
-VaR.05.boot.vbisx
-ci.VaR.05.boot.vbisx <- boot.ci(VaR.05.boot.vbisx, conf = 0.95, type = c("norm","perc"))
+lower.msft.boot = mean(boot.msft) - 2*se.msft.boot
+upper.msft.boot = mean(boot.msft) + 2*se.msft.boot
+width.msft.boot = upper.msft.boot - lower.msft.boot
+ci.msft.boot <- rbind(lower.msft.boot, upper.msft.boot, width.msft.boot)
 
 
-VaR.05.boot.vpacx = boot(ret.mat[, "vpacx"], 
-                         statistic=ValueAtRisk.05.boot, R=999)
-VaR.05.boot.vpacx
-ci.VaR.05.boot.vpacx <- boot.ci(VaR.05.boot.vpacx, conf = 0.95, type = c("norm","perc"))
+lower.nord.boot = mean(boot.nord) - 2*se.nord.boot
+upper.nord.boot = mean(boot.nord) + 2*se.nord.boot
+width.nord.boot = upper.nord.boot - lower.nord.boot
+ci.nord.boot <- rbind(lower.nord.boot, upper.nord.boot, width.nord.boot)
 
 
-VaR.05.boot.sd.vals <- data.frame(sd(VaR.05.boot.vfinx$t), sd(VaR.05.boot.veurx$t), sd(VaR.05.boot.veiex$t), sd(VaR.05.boot.vbltx$t), sd(VaR.05.boot.vbisx$t), sd(VaR.05.boot.vpacx$t))
+lower.sbux.boot = mean(boot.sbux) - 2*se.sbux.boot
+upper.sbux.boot = mean(boot.sbux) + 2*se.sbux.boot
+width.sbux.boot = upper.sbux.boot - lower.sbux.boot
+ci.sbux.boot <- rbind(lower.sbux.boot, upper.sbux.boot, width.sbux.boot)
 
-VaR.05.boot.sd.vals <- rbind(VaR.05.boot.sd.vals, VaR.normal.05)
+ci.boeing.boot
+ci.msft.boot
+ci.nord.boot
+ci.sbux.boot
+```
 
-colnames(VaR.05.boot.sd.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
-rownames(VaR.05.boot.sd.vals) <- c("std. error", "VaR Normal 0.05")
+The confidence interval for MSFT appears to be rather tight, and contains only positive values, so it's precise. The other 3 assets have imprecise estimates since we see that they contain both negative and positive values in the interval, which shows uncertainty and there1.portore the estimates are imprecise.
+ 
+## 4 - Compute efficient portfolio with target return equal to highest average return
+```{r target return, echo = FALSE}
 
-
-# bootstrap estimated standard errors for 1% VaR estimates
-VaR.01.boot.vfinx = boot(ret.mat[, "vfinx"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-
-VaR.01.boot.vfinx
-ci.VaR.01.boot.vfinx <- boot.ci(VaR.01.boot.vfinx, conf = 0.95, type = c("norm","perc"))
-
-VaR.01.boot.veurx = boot(ret.mat[, "veurx"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-VaR.01.boot.veurx
-ci.VaR.01.boot.veurx <- boot.ci(VaR.01.boot.veurx, conf = 0.95, type = c("norm","perc"))
-
-
-VaR.01.boot.veiex = boot(ret.mat[, "veiex"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-VaR.01.boot.veiex
-ci.VaR.01.boot.veiex <- boot.ci(VaR.01.boot.veiex, conf = 0.95, type = c("norm","perc"))
+# compute efficient portfolio with target return equal to highest average return
+mu.target = max(muhat.vals)
+e1.port = efficient.portfolio(muhat.vals, cov.mat, mu.target)
+e1.port
+plot(e1.port, col="blue")
 
 
-VaR.01.boot.vbltx = boot(ret.mat[, "vbltx"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-VaR.01.boot.vbltx
-ci.VaR.01.boot.vbltx <- boot.ci(VaR.01.boot.vbltx, conf = 0.95, type = c("norm","perc"))
-
-
-VaR.01.boot.vbisx = boot(ret.mat[, "vbisx"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-VaR.01.boot.vbisx
-ci.VaR.01.boot.vbisx <- boot.ci(VaR.01.boot.vbisx, conf = 0.95, type = c("norm","perc"))
-
-
-VaR.01.boot.vpacx = boot(ret.mat[, "vpacx"], 
-                         statistic=ValueAtRisk.01.boot, R=999)
-VaR.01.boot.vpacx
-ci.VaR.01.boot.vpacx <- boot.ci(VaR.01.boot.vpacx, conf = 0.95, type = c("norm","perc"))
-
-## making table for bootstrap 1% VaR and bootstrap standard errors
-VaR.01.boot.sd.vals <- data.frame(sd(VaR.01.boot.vfinx$t), sd(VaR.01.boot.veurx$t), sd(VaR.01.boot.veiex$t), sd(VaR.01.boot.vbltx$t), sd(VaR.01.boot.vbisx$t), sd(VaR.01.boot.vpacx$t))
-
-VaR.01.boot.sd.vals <- rbind(VaR.01.boot.sd.vals, VaR.normal.01)
-
-colnames(VaR.01.boot.sd.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
-rownames(VaR.01.boot.sd.vals) <- c("std. error", "VaR Normal 0.01")
-
-
-#print table of 1% and 5% VaR estimates with bootstrap standard errors 
-VaR.05.boot.sd.vals
-VaR.01.boot.sd.vals
-
-
-## plot 1% and 5% VaR estimates with bootstrap standard errors
-plot(VaR.05.boot.vfinx)
-plot(VaR.05.boot.veurx)
-plot(VaR.05.boot.veiex)
-plot(VaR.05.boot.vbltx)
-plot(VaR.05.boot.vbisx)
-plot(VaR.05.boot.vpacx)
-
-plot(VaR.01.boot.vfinx)
-plot(VaR.01.boot.veurx)
-plot(VaR.01.boot.veiex)
-plot(VaR.01.boot.vbltx)
-plot(VaR.01.boot.vbisx)
-plot(VaR.01.boot.vpacx)
+# compute covariance b/w min var portfolio and efficient port
+t(gmin.port$weights)%*%cov.mat%*%e1.port$weights
 
 ```
 
-Based on these standard errors, we can see that the estimates for 5% VaR of VEURX are precise, as the standard error is less than or equal to 10% of the size of the VaR estimate. 
+Nordstrom has negative weight in this portfolio which is -0.185. The covariance between the global minimum variance portfolio and the above efficient portfolio is .00351. 
 
-The 1% VaR estimate for VEURX and VEIEX are precise since their standard errors are less than 10% of the size of the estimates. 
+# 5 Compute efficient portfolio with target return equal to highest average return with NO SHORT SALES
+```{r , echo = FALSE}
 
-The asset with the lowest 1% VaR is VBISX whereas the asset with the highest 1% Var is VEIEX. The asset with the lowest 5% VaR is also VBISX and the highest is also VEIEX. 
+# compute efficient portfolio with target return equal to highest average return
+# but do not allow short sales
+mu.target = max(muhat.vals)
+e1.noshorts.port = efficient.portfolio(muhat.vals, cov.mat, mu.target, shorts=FALSE)
+e1.noshorts.port
+plot(e1.noshorts.port, col="blue")
 
 
-#### 95% Confidence Level of 5% VaR estimates 
-
-``` {r CI 5% VaR}
-##table for 95% CI for 5% VaR estimates
-
-ci.VaR.05.boot.vals <- rbind(ci.VaR.05.boot.vfinx$normal,ci.VaR.05.boot.veurx$normal, ci.VaR.05.boot.veiex$normal,ci.VaR.05.boot.vbltx$normal,ci.VaR.05.boot.vbisx$normal,ci.VaR.05.boot.vpacx$normal)
-
-rownames(ci.VaR.05.boot.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
-
-colnames(ci.VaR.05.boot.vals) <- c("conf", "lower bound", "upper bound")
-
-ci.VaR.05.boot.vals
+# compute covariance b/w min var portfolio and efficient port with no short sales
+t(gmin.port$weights)%*%cov.mat%*%e1.noshorts.port$weights
 
 ```
 
-#### 95% Confidence Level of 1% VaR estimates 
-```{r CI 1% VaR}
+In this portfolio, there are no negative weights. We put all our investment into Microsoft. The covariance between the global minimum variance portfolio and the above efficient portfolio is also .00351. 
 
-##table for 95% CI for 1% VaR estimates
+# 6 Compute ER, Variance, and SD for efficient portfolios as convex combination of Global min variance portfolio and efficient portfolio computed in Question 4
+```{r convex combinations}
+ef <- efficient.frontier(muhat.vals, cov.mat, alpha.min=-1, alpha.max=1, nport=20)
+attributes(ef)
 
-ci.VaR.01.boot.vals <- rbind(ci.VaR.01.boot.vfinx$normal,ci.VaR.01.boot.veurx$normal, ci.VaR.01.boot.veiex$normal,ci.VaR.01.boot.vbltx$normal,ci.VaR.01.boot.vbisx$normal,ci.VaR.01.boot.vpacx$normal)
+ef$er
+ef$sd
+ef.var = (ef$sd)^2
+ef.var
 
-rownames(ci.VaR.01.boot.vals) <- c("vfinx", "veurx", "veiex", "vbltx", "vbisx", "vpacx" )
+```
 
-colnames(ci.VaR.01.boot.vals) <- c("conf", "lower bound", "upper bound")
+# 7 - Markowitz bullet
+```{r markowitz, echo = FALSE}
+
+plot(ef, plot.assets=TRUE, col="blue", pch=16)
+points(gmin.port$sd, gmin.port$er, col="green", pch=16, cex=2)
+points(e1.port$sd, e1.port$er, col="red", pch=16, cex=2)
+text(gmin.port$sd, gmin.port$er, labels="GLOBAL MIN", pos=2)
+text(e1.port$sd, e1.port$er, labels="EFFICIENT PORTFOLIO", pos=2)
+
+```
+
+# 8 - Tangency portfolio assuming Risk free rate is 0.005 
+
+```{r tangency port rf, echo = FALSE}
+
+# compute tangency portfolio with rf = 0.005
+tan.port = tangency.portfolio(muhat.vals, cov.mat, risk.free=0.005)
+summary(tan.port)
+plot(tan.port, col="blue")
+
+```
+
+Yes there are negative weights for Nordstrom at -0.3166. This means that we should short sell 31.6% Nordstrom stock. 
+
+# 9 - Tangency portfolio assuming Risk free rate is 0.005 with NO SHORT SALES
+
+```{r no shorts rf , echo = FALSE}
+
+tan.noshorts.port = tangency.portfolio(muhat.vals, cov.mat, risk.free=0.005, shorts=FALSE)
+summary(tan.noshorts.port)
+plot(tan.noshorts.port, col="blue")
+```
+
+Now there are no negative weights in this portfolio. We simply do not invest anything into Nordstrom and only invest in the other 3 assets. 
+
+# 10 - Plot efficient portfolios that are combinations of T-Bills and tangency portfolio 
+```{r tbills and tan, echo = FALSE}
+
+
+plot(ef, plot.assets=TRUE, col="blue", pch=16)
+points(tan.port$sd, tan.port$er, col="red", pch=16, cex=2)
+text(tan.port$sd, tan.port$er, labels="TANGENCY", pos=2)
+sr.tan = (tan.port$er - rf)/tan.port$sd
+abline(a=rf, b=sr.tan, col="green", lwd=2)
 
 
 
 ```
 
-## 2.2 Annual VaR
-```{r annual VaR}
-#compute annual normal VaR
-Value.at.Risk.annualized = function(x, p=0.05, w=100000, method=c("normal", "empirical")) {
-	method=method[1]
-  x = as.matrix(x)
-  if (method == "normal") {
-	  q = apply(x*12, 2, mean) + apply(sqrt(12)*x, 2, sd)*qnorm(p)
-  } else {    
-    q = apply(x*12, 2, quantile, p)
-  }
-	VaR = (exp(q) - 1)*w
-	VaR
-}
-
-Value.at.Risk.annualized(ret.mat, p=0.01)
-Value.at.Risk.annualized(ret.mat, p=0.05)
+# 11 - Efficient portfolio that are combinations of T-Bills and tangency portfolio with same SD as SBUX
+```{r tbills and tan same as SD sbux, echo = FALSE}
+# efficient portfolio of T-bills + tangency that has the same SD as sbux
+names(tan.port)
+x.tan = sigmahat.vals["Starbucks"]/tan.port$sd
+x.tan
+mu.pe = 0.005 + x.tan*(tan.port$er - 0.005)
+mu.pe
 
 
+plot(ef, plot.assets=TRUE, col="blue", pch=16)
+points(tan.port$sd, tan.port$er, col="red", pch=16, cex=2)
+points(sigmahat.vals["Starbucks"], mu.pe, col="green", pch=16, cex=2)
+text(tan.port$sd, tan.port$er, labels="TANGENCY", pos=2)
+text(sigmahat.vals["Starbucks"], mu.pe, labels="efficient portfolio", pos=2)
+sr.tan = (tan.port$er - rf)/tan.port$sd
+abline(a=rf, b=sr.tan, col="green", lwd=2)
 ```
 
+Expected return is 6.4% on the portfolio. 
+
+# 12 VaR analysis - 1% and 5% Value at Risk for a One month investment of $50,000 in the Four Stocks and the Global Minimum Variance Portfolio 
+```{r var analysis, echo = FALSE}
+w0 = 50000
+qhat.05 = muhat.vals + sigmahat.vals*qnorm(0.05)
+qhat.01 = muhat.vals + sigmahat.vals*qnorm(0.01)
+qhatGmin.05 = gmin.port$er + gmin.port$sd*qnorm(0.05)
+qhatGmin.01 = gmin.port$er + gmin.port$sd*qnorm(0.01)
+VaR.05 = w0*qhat.05
+VaR.01 = w0*qhat.01
+VaRgmin.05 = w0*qhatGmin.05
+VaRgmin.01 = w0*qhatGmin.01
+
+
+
+rbind(VaR.05,VaR.01) 
+rbind(VaRgmin.05, VaRgmin.01)
+
+```
